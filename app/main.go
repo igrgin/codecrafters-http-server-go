@@ -141,6 +141,20 @@ func handleGet(request Request, connection net.Conn) net.Conn {
 			fmt.Printf("Response body: [% x]\n", []byte(sb.String()))
 			connection.Write([]byte(strResponse))
 		}
+	case strings.HasPrefix(request.Path, "/user-agent"):
+		{
+			userAgent := request.Headers["User-Agent"]
+			strResponse := fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
+				"Content-Type: text/plain\r\n"+
+				"Content-Length: %d\r\n"+
+				"Connection: close\r\n\r\n"+
+				"%s",
+				len(userAgent),
+				userAgent)
+			fmt.Println(userAgent)
+			fmt.Printf("Response body: [% x]\n", []byte(userAgent))
+			connection.Write([]byte(strResponse))
+		}
 	default:
 		{
 			connection.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
