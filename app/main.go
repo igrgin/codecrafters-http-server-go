@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -15,15 +16,12 @@ import (
 
 // Ensures gofmt doesn't remove the "net" and "os" imports above (feel free to remove this!)
 var (
-	_ = net.Listen
-	_ = os.Exit
+	_        = net.Listen
+	_        = os.Exit
+	filepath = flag.String("directory", "", "directory to serve files")
 )
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
-
-	// Uncomment this block to pass the first stage
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
 		fmt.Println("Failed to bind to port 4221")
@@ -153,6 +151,31 @@ func handleGet(request Request, connection net.Conn) net.Conn {
 				userAgent)
 			fmt.Println(userAgent)
 			fmt.Printf("Response body: [% x]\n", []byte(userAgent))
+			connection.Write([]byte(strResponse))
+		}
+	case strings.HasPrefix(request.Path, "/files/"):
+		{
+			const TMP = "/tmp/data/codecrafters.io/http-server-tester/"
+			name := request.Path[len("/files/"):]
+			file, err := os.Open(TMP + name)
+			if err != nil {
+				connection.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+				return connection
+			}
+			defer file.Close()
+
+			content, err := io.ReadAll(file)
+			if err != nil {
+				connection.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
+				return connection
+			}
+
+			strResponse := fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
+				"Content-Type: application/octet-stream\r\n"+
+				"Content-Length: %d\r\n"+
+				"Connection: close\r\n\r\n"+
+				"%s", len(content), content)
+
 			connection.Write([]byte(strResponse))
 		}
 	default:
