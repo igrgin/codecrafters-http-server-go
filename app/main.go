@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -40,6 +42,20 @@ func main() {
 		}
 		go handle(conn)
 	}
+}
+
+func gzipBytes(src []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	_, err := gw.Write(src)
+	if err != nil {
+		_ = gw.Close()
+		return nil, err
+	}
+	if err := gw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func handle(conn net.Conn) {
@@ -178,19 +194,24 @@ func handleGet(request Request, connection net.Conn, encodingHeader string) {
 		writeResponse(connection, "HTTP/1.1 200 OK", map[string]string{}, nil)
 	case strings.HasPrefix(request.Path, "/echo/"):
 		response := strings.TrimPrefix(request.Path, "/echo/")
+		body := []byte(response)
+
 		headers := map[string]string{
-			"Content-Type":   "text/plain",
-			"Content-Length": strconv.Itoa(len(response)),
+			"Content-Type": "text/plain",
 		}
 
-		if encodingHeader != "" {
-			headers["Content-Encoding"] = "gzip"
+		if acceptsGzip(strings.Split(request.Headers["Accept-Encoding"], ",")) {
+			if compressed, err := gzipBytes(body); err == nil {
+				body = compressed
+				headers["Content-Encoding"] = "gzip"
+			} else {
+				// log but fall back to uncompressed
+				fmt.Fprintln(os.Stderr, "gzip error:", err)
+			}
 		}
 
-		fmt.Println(headers)
-
-		fmt.Println(response)
-		writeResponse(connection, "HTTP/1.1 200 OK", headers, []byte(response))
+		headers["Content-Length"] = strconv.Itoa(len(body))
+		writeResponse(connection, "HTTP/1.1 200 OK", headers, body)
 	case strings.HasPrefix(request.Path, "/user-agent"):
 		userAgent := request.Headers["User-Agent"]
 		headers := map[string]string{
