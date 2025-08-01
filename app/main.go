@@ -121,10 +121,20 @@ func writeResponse(conn net.Conn, statusLine string, headers map[string]string, 
 	}
 }
 
+func acceptsGzip(acceptedEnc []string) bool {
+	for _, part := range acceptedEnc {
+		if strings.EqualFold(strings.TrimSpace(part), "gzip") {
+			return true
+		}
+	}
+	return false
+}
+
 func handleRequest(request Request, connection net.Conn) {
 	// connection is closed by caller defer
 	encodingHeader := ""
-	if request.Headers["Accept-Encoding"] == "gzip" {
+	acceptedEncoding := strings.Split(request.Headers["Accept-Encoding"], ",")
+	if acceptsGzip(acceptedEncoding) {
 		encodingHeader = "Content-Encoding: gzip"
 	}
 
@@ -172,9 +182,13 @@ func handleGet(request Request, connection net.Conn, encodingHeader string) {
 			"Content-Type":   "text/plain",
 			"Content-Length": strconv.Itoa(len(response)),
 		}
+
 		if encodingHeader != "" {
 			headers["Content-Encoding"] = "gzip"
 		}
+
+		fmt.Println(headers)
+
 		fmt.Println(response)
 		writeResponse(connection, "HTTP/1.1 200 OK", headers, []byte(response))
 	case strings.HasPrefix(request.Path, "/user-agent"):
