@@ -62,65 +62,102 @@ func handle(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
-	// Request line
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error reading request line:", err)
-		return
-	}
-	parts := strings.SplitN(strings.TrimRight(line, "\r\n"), " ", 3)
-	if len(parts) < 3 {
-		fmt.Fprintln(os.Stderr, "Malformed request line:", line)
-		return
-	}
-	req := Request{
-		Method:   parts[0],
-		Path:     parts[1],
-		Protocol: parts[2],
-		Headers:  make(map[string]string),
-	}
-
-	// Headers
 	for {
-		headerLine, err := reader.ReadString('\n')
+		// Request line
+		line, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Error reading header:", err)
 			return
 		}
-		if headerLine == "\r\n" {
-			break
+		parts := strings.SplitN(strings.TrimRight(line, "\r\n"), " ", 3)
+		if len(parts) < 3 {
+			fmt.Fprintln(os.Stderr, "Malformed request line:", line)
+			return
 		}
-		colon := strings.Index(headerLine, ":")
-		if colon == -1 {
-			continue // skip malformed header
+		req := Request{
+			Method:   parts[0],
+			Path:     parts[1],
+			Protocol: parts[2],
+			Headers:  make(map[string]string),
 		}
-		key := headerLine[:colon]
-		value := strings.TrimSpace(headerLine[colon+1:])
-		req.Headers[key] = value
-	}
 
-	// Body, if any
-	if cl, ok := req.Headers["Content-Length"]; ok {
-		contentSize, err := strconv.Atoi(cl)
-		if err == nil && contentSize > 0 {
-			content := make([]byte, contentSize)
-			n, err := io.ReadFull(reader, content)
+		// Headers
+		for {
+			headerLine, err := reader.ReadString('\n')
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error reading body:", err)
-			} else if n != contentSize {
-				fmt.Fprintln(os.Stderr, "Unexpected body size:", n, "expected", contentSize)
-			} else {
-				req.Body = string(content)
+				fmt.Fprintln(os.Stderr, "Error reading header:", err)
+				return
+			}
+			if headerLine == "\r\n" {
+				break
+			}
+			colon := strings.Index(headerLine, ":")
+			if colon == -1 {
+				continue
+			}
+			key := headerLine[:colon]
+			value := strings.TrimSpace(headerLine[colon+1:])
+			req.Headers[key] = value
+		}
+
+		// Body, if any
+		if cl, ok := req.Headers["Content-Length"]; ok {
+			contentSize, err := strconv.Atoi(cl)
+			if err == nil && contentSize > 0 {
+				content := make([]byte, contentSize)
+				n, err := io.ReadFull(reader, content)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "Error reading body:", err)
+				} else if n != contentSize {
+					fmt.Fprintln(os.Stderr, "Unexpected body size:", n, "expected", contentSize)
+				} else {
+					req.Body = string(content)
+				}
 			}
 		}
-	}
 
-	// Debug dump of request
-	if b, err := json.Marshal(req); err == nil {
-		fmt.Println(string(b))
-	}
+		if b, err := json.Marshal(req); err == nil {
+			fmt.Println(string(b))
+		}
 
-	handleRequest(req, conn)
+		// Determine if we should signal close
+		connectionHeader := ""
+		if shouldClose(req) {
+			connectionHeader = "close"
+		}
+
+		// Determine gzip acceptance
+		encodingHeader := ""
+		acceptedEncoding := strings.Split(req.Headers["Accept-Encoding"], ",")
+		if acceptsGzip(acceptedEncoding) {
+			encodingHeader = "Content-Encoding: gzip"
+		}
+
+		// Dispatch
+		switch req.Method {
+		case "GET":
+			handleGetWithConnHeader(req, conn, encodingHeader, connectionHeader)
+		case "POST":
+			fmt.Println("POST")
+			handlePostWithConnHeader(req, conn, encodingHeader, connectionHeader)
+		default:
+			writeResponseWithConnection(conn, "HTTP/1.1 405 Method Not Allowed", nil, nil, connectionHeader)
+		}
+
+		if connectionHeader == "close" {
+			return
+		}
+	}
+}
+
+func shouldClose(request Request) bool {
+	connHdr := request.Headers["Connection"]
+	if strings.EqualFold(connHdr, "close") {
+		return true
+	}
+	if request.Protocol == "HTTP/1.0" && !strings.EqualFold(connHdr, "keep-alive") {
+		return true
+	}
+	return false
 }
 
 func writeResponse(conn net.Conn, statusLine string, headers map[string]string, body []byte) {
@@ -129,12 +166,21 @@ func writeResponse(conn net.Conn, statusLine string, headers map[string]string, 
 	for k, v := range headers {
 		sb.WriteString(k + ": " + v + "\r\n")
 	}
-	sb.WriteString("Connection: close\r\n")
 	sb.WriteString("\r\n")
 	conn.Write([]byte(sb.String()))
 	if len(body) > 0 {
 		conn.Write(body)
 	}
+}
+
+func writeResponseWithConnection(conn net.Conn, statusLine string, headers map[string]string, body []byte, connectionValue string) {
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+	if connectionValue != "" {
+		headers["Connection"] = connectionValue
+	}
+	writeResponse(conn, statusLine, headers, body)
 }
 
 func acceptsGzip(acceptedEnc []string) bool {
@@ -146,27 +192,7 @@ func acceptsGzip(acceptedEnc []string) bool {
 	return false
 }
 
-func handleRequest(request Request, connection net.Conn) {
-	// connection is closed by caller defer
-	encodingHeader := ""
-	acceptedEncoding := strings.Split(request.Headers["Accept-Encoding"], ",")
-	if acceptsGzip(acceptedEncoding) {
-		encodingHeader = "Content-Encoding: gzip"
-	}
-
-	switch request.Method {
-	case "GET":
-		handleGet(request, connection, encodingHeader)
-	case "POST":
-		fmt.Println("POST")
-		handlePost(request, connection, encodingHeader)
-	default:
-		// Unhandled method
-		writeResponse(connection, "HTTP/1.1 405 Method Not Allowed", map[string]string{}, nil)
-	}
-}
-
-func handlePost(request Request, connection net.Conn, encodingHeader string) {
+func handlePostWithConnHeader(request Request, connection net.Conn, encodingHeader, connectionHeader string) {
 	if strings.HasPrefix(request.Path, "/files/") {
 		name := request.Path[len("/files/"):]
 		target := *filepath + name
@@ -174,28 +200,38 @@ func handlePost(request Request, connection net.Conn, encodingHeader string) {
 		err := os.WriteFile(target, []byte(request.Body), 0644)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error writing file:", err)
-			writeResponse(connection, "HTTP/1.1 500 Internal Server Error", map[string]string{}, []byte(err.Error()))
+			body := []byte(err.Error())
+			headers := map[string]string{}
+			if acceptsGzip(strings.Split(request.Headers["Accept-Encoding"], ",")) {
+				if compressed, err := gzipBytes(body); err == nil {
+					body = compressed
+					headers["Content-Encoding"] = "gzip"
+				} else {
+					fmt.Fprintln(os.Stderr, "gzip error:", err)
+				}
+			}
+			headers["Content-Length"] = strconv.Itoa(len(body))
+			writeResponseWithConnection(connection, "HTTP/1.1 500 Internal Server Error", headers, body, connectionHeader)
 			return
 		}
 		headers := map[string]string{}
-		if encodingHeader != "" {
+		if acceptsGzip(strings.Split(request.Headers["Accept-Encoding"], ",")) {
+			// no body, so just set header if desired (but empty body)
 			headers["Content-Encoding"] = "gzip"
 		}
-		writeResponse(connection, "HTTP/1.1 201 Created", headers, nil)
+		writeResponseWithConnection(connection, "HTTP/1.1 201 Created", headers, nil, connectionHeader)
 		return
 	}
-	// Fallback for unsupported POST paths
-	writeResponse(connection, "HTTP/1.1 404 Not Found", map[string]string{}, nil)
+	writeResponseWithConnection(connection, "HTTP/1.1 404 Not Found", nil, nil, connectionHeader)
 }
 
-func handleGet(request Request, connection net.Conn, encodingHeader string) {
+func handleGetWithConnHeader(request Request, connection net.Conn, encodingHeader, connectionHeader string) {
 	switch {
 	case request.Path == "/":
-		writeResponse(connection, "HTTP/1.1 200 OK", map[string]string{}, nil)
+		writeResponseWithConnection(connection, "HTTP/1.1 200 OK", nil, nil, connectionHeader)
 	case strings.HasPrefix(request.Path, "/echo/"):
 		response := strings.TrimPrefix(request.Path, "/echo/")
 		body := []byte(response)
-
 		headers := map[string]string{
 			"Content-Type": "text/plain",
 		}
@@ -205,47 +241,60 @@ func handleGet(request Request, connection net.Conn, encodingHeader string) {
 				body = compressed
 				headers["Content-Encoding"] = "gzip"
 			} else {
-				// log but fall back to uncompressed
 				fmt.Fprintln(os.Stderr, "gzip error:", err)
 			}
 		}
 
 		headers["Content-Length"] = strconv.Itoa(len(body))
-		writeResponse(connection, "HTTP/1.1 200 OK", headers, body)
+		fmt.Println(headers)
+		fmt.Println(response)
+		writeResponseWithConnection(connection, "HTTP/1.1 200 OK", headers, body, connectionHeader)
 	case strings.HasPrefix(request.Path, "/user-agent"):
 		userAgent := request.Headers["User-Agent"]
+		body := []byte(userAgent)
 		headers := map[string]string{
-			"Content-Type":   "text/plain",
-			"Content-Length": strconv.Itoa(len(userAgent)),
+			"Content-Type": "text/plain",
 		}
-		if encodingHeader != "" {
-			headers["Content-Encoding"] = "gzip"
+		if acceptsGzip(strings.Split(request.Headers["Accept-Encoding"], ",")) {
+			if compressed, err := gzipBytes(body); err == nil {
+				body = compressed
+				headers["Content-Encoding"] = "gzip"
+			} else {
+				fmt.Fprintln(os.Stderr, "gzip error:", err)
+			}
 		}
+		headers["Content-Length"] = strconv.Itoa(len(body))
 		fmt.Println(userAgent)
-		writeResponse(connection, "HTTP/1.1 200 OK", headers, []byte(userAgent))
+		writeResponseWithConnection(connection, "HTTP/1.1 200 OK", headers, body, connectionHeader)
 	case strings.HasPrefix(request.Path, "/files/"):
 		name := request.Path[len("/files/"):]
 		target := *filepath + name
 		file, err := os.Open(target)
 		if err != nil {
-			writeResponse(connection, "HTTP/1.1 404 Not Found", map[string]string{}, nil)
+			writeResponseWithConnection(connection, "HTTP/1.1 404 Not Found", nil, nil, connectionHeader)
 			return
 		}
 		defer file.Close()
 		content, err := io.ReadAll(file)
 		if err != nil {
-			writeResponse(connection, "HTTP/1.1 404 Not Found", map[string]string{}, nil)
+			writeResponseWithConnection(connection, "HTTP/1.1 404 Not Found", nil, nil, connectionHeader)
 			return
 		}
+		body := content
 		headers := map[string]string{
-			"Content-Type":   "application/octet-stream",
-			"Content-Length": strconv.Itoa(len(content)),
+			"Content-Type": "application/octet-stream",
 		}
-		if encodingHeader != "" {
-			headers["Content-Encoding"] = "gzip"
+		if acceptsGzip(strings.Split(request.Headers["Accept-Encoding"], ",")) {
+			if compressed, err := gzipBytes(body); err == nil {
+				body = compressed
+				headers["Content-Encoding"] = "gzip"
+			} else {
+				fmt.Fprintln(os.Stderr, "gzip error:", err)
+			}
 		}
-		writeResponse(connection, "HTTP/1.1 200 OK", headers, content)
+		headers["Content-Length"] = strconv.Itoa(len(body))
+		writeResponseWithConnection(connection, "HTTP/1.1 200 OK", headers, body, connectionHeader)
 	default:
-		writeResponse(connection, "HTTP/1.1 404 Not Found", map[string]string{}, nil)
+		writeResponseWithConnection(connection, "HTTP/1.1 404 Not Found", nil, nil, connectionHeader)
 	}
 }
