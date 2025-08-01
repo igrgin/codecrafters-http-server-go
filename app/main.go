@@ -40,7 +40,7 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-
+		flag.Parse()
 		go handle(conn)
 	}
 }
@@ -109,9 +109,35 @@ func handleRequest(request Request, connection net.Conn) net.Conn {
 		{
 			handleGet(request, connection)
 		}
+	case request.Method == "POST":
+		{
+			fmt.Println("POST")
+			handlePost(request, connection)
+		}
 	default:
 		{
 			errors.New("Unhandled Method")
+		}
+	}
+	return connection
+}
+
+func handlePost(request Request, connection net.Conn) net.Conn {
+	switch {
+	case strings.HasPrefix(request.Path, "/files/"):
+		{
+			d1 := []byte(request.Body)
+			name := request.Path[len("/files/"):]
+			fmt.Println(*filepath + name)
+			err := os.WriteFile(*filepath+name, d1, 0644)
+
+			if err != nil {
+				fmt.Println("Error", err)
+				connection.Write([]byte(err.Error()))
+				return connection
+			}
+
+			connection.Write([]byte("HTTP/1.1 201 Created\r\n\r\n"))
 		}
 	}
 	return connection
@@ -155,9 +181,8 @@ func handleGet(request Request, connection net.Conn) net.Conn {
 		}
 	case strings.HasPrefix(request.Path, "/files/"):
 		{
-			const TMP = "/tmp/data/codecrafters.io/http-server-tester/"
 			name := request.Path[len("/files/"):]
-			file, err := os.Open(TMP + name)
+			file, err := os.Open(*filepath + name)
 			if err != nil {
 				connection.Write([]byte("HTTP/1.1 404 Not Found\r\n\r\n"))
 				return connection
