@@ -15,7 +15,7 @@ import (
 
 func handleFileGet(request network.Request, connection net.Conn) {
 	name := request.Path[len(constants.FilesEndpoint):]
-	target := config.Configuration.GetDirectory() + name
+	target := config.Instance.Directory + name
 	file, err := os.Open(target)
 	if err != nil {
 		response := network.NewResponse(http.StatusNotFound, []byte{}, make(http.Header))
