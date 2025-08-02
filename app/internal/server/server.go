@@ -26,18 +26,13 @@ func Handle(conn net.Conn) {
 			fmt.Println(string(b))
 		}
 
-		connectionHeader := ""
-		if util.ShouldClose(req) {
-			connectionHeader = "close"
-		}
-
 		strSlice := strings.Split(req.Headers[constants.AcceptEncoding], ",")
 
 		shouldAddEncodingHeader := middleware.ShouldCompress(strSlice)
 
 		dispatchRequest(req, conn, shouldAddEncodingHeader)
 
-		if connectionHeader == "close" {
+		if util.ShouldClose(req) {
 			return
 		}
 	}
