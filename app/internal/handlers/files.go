@@ -42,7 +42,7 @@ func handleFileGet(request network.Request, connection net.Conn) {
 func handleFilePost(request network.Request, connection net.Conn) {
 	name := request.Path[len(constants.FilesEndpoint):]
 	header := make(http.Header)
-	target := config.Configuration.GetDirectory() + name
+	target := config.Instance.Directory + name
 	fmt.Println("TARGET: " + target)
 	err := os.WriteFile(target, []byte(request.Body), 0644)
 	if err != nil {
