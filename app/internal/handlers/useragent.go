@@ -17,7 +17,7 @@ func handleUserAgent(request network.Request, connection net.Conn) {
 	headers.Set(constants.ContentType, "text/plain")
 	headers.Set(constants.ContentLength, strconv.Itoa(len(body)))
 
-	response := network.NewResponse(200, body, headers)
+	response := network.NewResponse(http.StatusOK, request.Protocol, body, headers)
 
 	response.WriteTo(connection, util.ShouldClose(request))
 

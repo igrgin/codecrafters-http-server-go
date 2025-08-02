@@ -10,13 +10,15 @@ import (
 
 type Response struct {
 	StatusCode int
+	protocol   string
 	Headers    http.Header
 	Body       []byte
 }
 
-func NewResponse(statusCode int, body []byte, headers http.Header) *Response {
+func NewResponse(statusCode int, protocol string, body []byte, headers http.Header) *Response {
 	return &Response{
 		StatusCode: statusCode,
+		protocol:   protocol,
 		Headers:    headers,
 		Body:       body,
 	}
@@ -29,7 +31,7 @@ func (r *Response) WithHeader(key, value string) *Response {
 
 func (r *Response) toBytes() []byte {
 	var b strings.Builder
-	statusLine := fmt.Sprintf("HTTP/1.1 %d %s\r\n", r.StatusCode, http.StatusText(r.StatusCode))
+	statusLine := fmt.Sprintf("%s %d %s\r\n", r.protocol, r.StatusCode, http.StatusText(r.StatusCode))
 	b.WriteString(statusLine)
 	for k, vals := range r.Headers {
 		for _, v := range vals {

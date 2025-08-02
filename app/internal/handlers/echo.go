@@ -32,7 +32,7 @@ func handleEcho(request network.Request, connection net.Conn, shouldAddEncodingH
 	}
 
 	fmt.Println(headers)
-	response := network.NewResponse(200, body, headers)
+	response := network.NewResponse(http.StatusOK, request.Protocol, body, headers)
 
 	response.WriteTo(connection, util.ShouldClose(request))
 }

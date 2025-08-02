@@ -8,6 +8,6 @@ import (
 )
 
 func handleDefault(request network.Request, connection net.Conn) {
-	response := network.NewResponse(http.StatusOK, []byte{}, make(http.Header))
+	response := network.NewResponse(http.StatusOK, request.Protocol, []byte{}, make(http.Header))
 	response.WriteTo(connection, util.ShouldClose(request))
 }

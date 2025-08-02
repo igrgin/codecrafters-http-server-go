@@ -18,14 +18,14 @@ func handleFileGet(request network.Request, connection net.Conn) {
 	target := config.Instance.Directory + name
 	file, err := os.Open(target)
 	if err != nil {
-		response := network.NewResponse(http.StatusNotFound, []byte{}, make(http.Header))
+		response := network.NewResponse(http.StatusNotFound, request.Protocol, []byte{}, make(http.Header))
 		response.WriteTo(connection, util.ShouldClose(request))
 		return
 	}
 	defer file.Close()
 	content, err := io.ReadAll(file)
 	if err != nil {
-		response := network.NewResponse(http.StatusNotFound, []byte{}, make(http.Header))
+		response := network.NewResponse(http.StatusNotFound, request.Protocol, []byte{}, make(http.Header))
 		response.WriteTo(connection, util.ShouldClose(request))
 		return
 	}
@@ -35,7 +35,7 @@ func handleFileGet(request network.Request, connection net.Conn) {
 	headers.Set(constants.ContentType, "application/octet-stream")
 
 	headers.Set(constants.ContentLength, strconv.Itoa(len(body)))
-	response := network.NewResponse(http.StatusOK, body, headers)
+	response := network.NewResponse(http.StatusOK, request.Protocol, body, headers)
 	response.WriteTo(connection, util.ShouldClose(request))
 }
 
@@ -47,10 +47,10 @@ func handleFilePost(request network.Request, connection net.Conn) {
 	err := os.WriteFile(target, []byte(request.Body), 0644)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error writing file:", err)
-		response := network.NewResponse(http.StatusNotFound, []byte{}, header)
+		response := network.NewResponse(http.StatusNotFound, request.Protocol, []byte{}, header)
 		response.WriteTo(connection, util.ShouldClose(request))
 	}
 
-	response := network.NewResponse(http.StatusCreated, []byte{}, header)
+	response := network.NewResponse(http.StatusCreated, request.Protocol, []byte{}, header)
 	response.WriteTo(connection, util.ShouldClose(request))
 }

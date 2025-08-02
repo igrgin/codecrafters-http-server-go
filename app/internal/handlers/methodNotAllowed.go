@@ -8,6 +8,6 @@ import (
 )
 
 func HandleMethodNotAllowed(request network.Request, connection net.Conn) {
-	response := network.NewResponse(http.StatusMethodNotAllowed, []byte{}, make(http.Header))
+	response := network.NewResponse(http.StatusMethodNotAllowed, request.Protocol, []byte{}, make(http.Header))
 	response.WriteTo(connection, util.ShouldClose(request))
 }
