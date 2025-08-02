@@ -25,7 +25,6 @@ func main() {
 
 	for {
 		conn, err := l.Accept()
-		defer conn.Close()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error accepting connection:", err)
 			os.Exit(1)

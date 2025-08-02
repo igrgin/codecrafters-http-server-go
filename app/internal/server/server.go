@@ -13,6 +13,7 @@ import (
 )
 
 func Handle(conn net.Conn) {
+	defer conn.Close()
 	reader := bufio.NewReader(conn)
 
 	for {
