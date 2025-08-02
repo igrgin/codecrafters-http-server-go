@@ -2,6 +2,7 @@ package network
 
 import (
 	"fmt"
+	"github.com/codecrafters-io/http-server-starter-go/app/pkg/constants"
 	"net"
 	"net/http"
 	"strings"
@@ -42,8 +43,13 @@ func (r *Response) toBytes() []byte {
 	return []byte(b.String())
 }
 
-func (r *Response) WriteTo(conn net.Conn) error {
+func (r *Response) WriteTo(conn net.Conn, shouldClose bool) error {
 
+	if shouldClose {
+		r.Headers.Set(constants.Connection, "close")
+	}
+
+	fmt.Printf("Response:\n%s\n", string(r.toBytes()))
 	_, err := conn.Write(r.toBytes())
 	return err
 }

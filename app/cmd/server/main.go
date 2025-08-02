@@ -13,8 +13,9 @@ var filepath = flag.String("directory", "", "directory to serve files")
 
 func main() {
 	flag.Parse()
-
+	fmt.Println(*filepath)
 	config.Configuration.SetDirectory(*filepath)
+	fmt.Println(config.Configuration.GetDirectory())
 
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
@@ -25,6 +26,7 @@ func main() {
 
 	for {
 		conn, err := l.Accept()
+		defer conn.Close()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error accepting connection:", err)
 			os.Exit(1)

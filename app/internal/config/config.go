@@ -3,14 +3,13 @@ package config
 var Configuration Config
 
 type Config struct {
-	Directory string
+	directory string
 }
 
-func (c Config) GetDirectory() string {
-
-	return c.Directory
+func (c *Config) GetDirectory() string {
+	return c.directory
 }
 
-func (c Config) SetDirectory(dir string) {
-	c.Directory = dir
+func (c *Config) SetDirectory(dir string) {
+	c.directory = dir
 }

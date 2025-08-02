@@ -6,4 +6,5 @@ const (
 	ContentType     = "Content-Type"
 	ContentLength   = "Content-Length"
 	Connection      = "Connection"
+	UserAgent       = "User-Agent"
 )

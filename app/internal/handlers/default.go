@@ -1,12 +1,13 @@
 package handlers
 
 import (
-	network2 "github.com/codecrafters-io/http-server-starter-go/app/internal/network"
+	"github.com/codecrafters-io/http-server-starter-go/app/internal/network"
+	"github.com/codecrafters-io/http-server-starter-go/app/pkg/util"
 	"net"
 	"net/http"
 )
 
-func handleDefault(request network2.Request, connection net.Conn) {
-	response := network2.NewResponse(http.StatusOK, []byte{}, make(http.Header))
-	response.WriteTo(connection)
+func handleDefault(request network.Request, connection net.Conn) {
+	response := network.NewResponse(http.StatusOK, []byte{}, make(http.Header))
+	response.WriteTo(connection, util.ShouldClose(request))
 }

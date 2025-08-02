@@ -1,24 +1,24 @@
 package handlers
 
 import (
-	"fmt"
-	network2 "github.com/codecrafters-io/http-server-starter-go/app/internal/network"
+	"github.com/codecrafters-io/http-server-starter-go/app/internal/network"
 	"github.com/codecrafters-io/http-server-starter-go/app/pkg/constants"
+	"github.com/codecrafters-io/http-server-starter-go/app/pkg/util"
 	"net"
 	"net/http"
 	"strconv"
 )
 
-func handleUserAgent(request network2.Request, connection net.Conn) {
-	userAgent := request.Headers["User-Agent"]
+func handleUserAgent(request network.Request, connection net.Conn) {
+	userAgent := request.Headers[constants.UserAgent]
 	body := []byte(userAgent)
 	headers := make(http.Header)
 
+	headers.Set(constants.ContentType, "text/plain")
 	headers.Set(constants.ContentLength, strconv.Itoa(len(body)))
 
-	fmt.Println(userAgent)
-	response := network2.NewResponse(200, body, headers)
+	response := network.NewResponse(200, body, headers)
 
-	response.WriteTo(connection)
+	response.WriteTo(connection, util.ShouldClose(request))
 
 }
