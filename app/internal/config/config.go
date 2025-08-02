@@ -6,7 +6,7 @@ type Config struct {
 	directory string
 }
 
-func (c *Config) GetDirectory() string {
+func (c Config) GetDirectory() string {
 	return c.directory
 }
 

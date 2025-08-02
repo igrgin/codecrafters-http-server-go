@@ -13,9 +13,8 @@ var filepath = flag.String("directory", "", "directory to serve files")
 
 func main() {
 	flag.Parse()
-	fmt.Println(*filepath)
+
 	config.Configuration.SetDirectory(*filepath)
-	fmt.Println(config.Configuration.GetDirectory())
 
 	l, err := net.Listen("tcp", "0.0.0.0:4221")
 	if err != nil {
